@@ -5,106 +5,207 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>オセロゲーム</title>
     <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
         table {
             border-collapse: collapse;
-            margin: 20px auto;
+            background-color: #008000;
+            margin: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
         }
+
         td {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             text-align: center;
-            border: 1px solid black;
+            border: 1px solid #000;
             cursor: pointer;
+            position: relative;
         }
-        td:hover {
-            background-color: #f0f0f0;
+
+        .cell-content {
+            width: 80%;
+            height: 80%;
+            margin: 10%;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: all 0.3s ease;
         }
+
+        .X {
+            background-color: #000;
+        }
+
+        .O {
+            background-color: #fff;
+        }
+
+        .valid-move {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 30%;
+            height: 30%;
+            margin: 35%;
+        }
+
         h2 {
-            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
         }
-        .message {
-            text-align: center;
-            font-size: 20px;
+
+        .status {
+            font-size: 1.2em;
+            margin: 10px 0;
+            color: #444;
         }
+
         .btn {
-            display: block;
-            margin: 20px auto;
-            padding: 10px 20px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
             font-size: 16px;
+            margin: 4px 2px;
             cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .score-board {
+            display: flex;
+            justify-content: space-around;
+            width: 300px;
+            margin: 20px 0;
+        }
+
+        .score {
+            text-align: center;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
     </style>
 </head>
 <body>
     <h2>オセロゲーム</h2>
-    <div class="message">
-        <p>現在のプレイヤー: <span id="current-player">X</span></p>
-        <p id="game-status"></p>
+    <div class="score-board">
+        <div class="score">
+            <div>黒 (X)</div>
+            <div id="score-x">2</div>
+        </div>
+        <div class="score">
+            <div>白 (O)</div>
+            <div id="score-o">2</div>
+        </div>
     </div>
-    <table id="game-board"></table>
-    <button class="btn" id="restart-button">ゲームをリスタート</button>
+    <div id="status" class="status">現在のプレイヤー: 黒 (X)</div>
+    <table id="board"></table>
+    <button id="restart-btn" class="btn">ゲームをリスタート</button>
 
     <script>
-        const apiUrl = 'http://127.0.0.1:8000';  // FastAPIサーバーのURL
+        let validMoves = [];
 
-        // ゲームボードを描画する関数
-        function renderBoard(board) {
-            const table = document.getElementById('game-board');
-            table.innerHTML = ''; // ボードを初期化
-            for (let i = 0; i < 8; i++) {
-                let row = document.createElement('tr');
-                for (let j = 0; j < 8; j++) {
-                    let cell = document.createElement('td');
-                    cell.innerText = board[i][j] === ' ' ? '' : board[i][j];
-                    cell.onclick = () => makeMove(i, j);
-                    row.appendChild(cell);
+        function updateScore() {
+            let xCount = 0, oCount = 0;
+            document.querySelectorAll('td').forEach(cell => {
+                if (cell.firstChild?.classList.contains('X')) xCount++;
+                if (cell.firstChild?.classList.contains('O')) oCount++;
+            });
+            document.getElementById('score-x').textContent = xCount;
+            document.getElementById('score-o').textContent = oCount;
+        }
+
+        function createCell(value, row, col) {
+            const cell = document.createElement('td');
+            if (value !== ' ') {
+                const disc = document.createElement('div');
+                disc.className = `cell-content ${value}`;
+                cell.appendChild(disc);
+            } else if (validMoves.some(move => move.row === row && move.col === col)) {
+                const hint = document.createElement('div');
+                hint.className = 'valid-move';
+                cell.appendChild(hint);
+            }
+            cell.onclick = () => makeMove(row, col);
+            return cell;
+        }
+
+        function renderBoard(data) {
+            const board = document.getElementById('board');
+            validMoves = data.valid_moves || [];
+            board.innerHTML = '';
+            
+            data.board.forEach((row, i) => {
+                const tr = document.createElement('tr');
+                row.forEach((cell, j) => {
+                    tr.appendChild(createCell(cell, i, j));
+                });
+                board.appendChild(tr);
+            });
+
+            document.getElementById('status').textContent = 
+                `現在のプレイヤー: ${data.current_player === 'X' ? '黒 (X)' : '白 (O)'}`;
+            
+            updateScore();
+        }
+
+        async function makeMove(row, col) {
+            try {
+                const response = await fetch('/move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ row, col })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail);
                 }
-                table.appendChild(row);
+
+                const data = await response.json();
+                renderBoard(data);
+            } catch (error) {
+                alert(error.message);
             }
         }
 
-        // ゲームの状態を更新する関数
-        function updateGameStatus() {
-            fetch(`${apiUrl}/board`)
-                .then(response => response.json())
-                .then(data => {
-                    renderBoard(data.board);
-                    document.getElementById('current-player').innerText = data.current_player;
-                });
+        async function restartGame() {
+            try {
+                const response = await fetch('/restart', { method: 'POST' });
+                const data = await response.json();
+                renderBoard(data);
+            } catch (error) {
+                alert('ゲームのリスタートに失敗しました');
+            }
         }
 
-        // プレイヤーが手を打つ関数
-        function makeMove(row, col) {
-            fetch(`${apiUrl}/move`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ row: row, col: col })
-            })
+        document.getElementById('restart-btn').onclick = restartGame;
+
+        // 初期ボードの取得と描画
+        fetch('/board')
             .then(response => response.json())
-            .then(data => {
-                if (data.valid) {
-                    updateGameStatus();
-                } else {
-                    alert(data.message || '無効な手です');
-                }
-            });
-        }
-
-        // ゲームをリスタートする関数
-        document.getElementById('restart-button').onclick = function() {
-            fetch(`${apiUrl}/restart`, { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    updateGameStatus();
-                });
-        };
-
-        // 初期化：ページが読み込まれたときにボードの状態を取得
-        window.onload = function() {
-            updateGameStatus();
-        };
+            .then(data => renderBoard(data))
+            .catch(error => alert('ゲームの初期化に失敗しました'));
     </script>
 </body>
 </html>
