@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オセロゲーム</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            margin: 20px auto;
+        }
+        td {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            border: 1px solid black;
+            cursor: pointer;
+        }
+        td:hover {
+            background-color: #f0f0f0;
+        }
+        h2 {
+            text-align: center;
+        }
+        .message {
+            text-align: center;
+            font-size: 20px;
+        }
+        .btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h2>オセロゲーム</h2>
+    <div class="message">
+        <p>現在のプレイヤー: <span id="current-player">X</span></p>
+        <p id="game-status"></p>
+    </div>
+    <table id="game-board"></table>
+    <button class="btn" id="restart-button">ゲームをリスタート</button>
+
+    <script>
+        const apiUrl = 'http://127.0.0.1:8000';  // FastAPIサーバーのURL
+
+        // ゲームボードを描画する関数
+        function renderBoard(board) {
+            const table = document.getElementById('game-board');
+            table.innerHTML = ''; // ボードを初期化
+            for (let i = 0; i < 8; i++) {
+                let row = document.createElement('tr');
+                for (let j = 0; j < 8; j++) {
+                    let cell = document.createElement('td');
+                    cell.innerText = board[i][j] === ' ' ? '' : board[i][j];
+                    cell.onclick = () => makeMove(i, j);
+                    row.appendChild(cell);
+                }
+                table.appendChild(row);
+            }
+        }
+
+        // ゲームの状態を更新する関数
+        function updateGameStatus() {
+            fetch(`${apiUrl}/board`)
+                .then(response => response.json())
+                .then(data => {
+                    renderBoard(data.board);
+                    document.getElementById('current-player').innerText = data.current_player;
+                });
+        }
+
+        // プレイヤーが手を打つ関数
+        function makeMove(row, col) {
+            fetch(`${apiUrl}/move`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ row: row, col: col })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.valid) {
+                    updateGameStatus();
+                } else {
+                    alert(data.message || '無効な手です');
+                }
+            });
+        }
+
+        // ゲームをリスタートする関数
+        document.getElementById('restart-button').onclick = function() {
+            fetch(`${apiUrl}/restart`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    updateGameStatus();
+                });
+        };
+
+        // 初期化：ページが読み込まれたときにボードの状態を取得
+        window.onload = function() {
+            updateGameStatus();
+        };
+    </script>
+</body>
+</html>
