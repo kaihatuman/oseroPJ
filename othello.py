@@ -70,8 +70,8 @@ class Othello:
 game = Othello()
 while game.has_valid_move():
     game.print_board()
-    row = int(input(f"プレイヤー {game.current_player} - 行を選択 (0-7): "))
-    col = int(input(f"プレイヤー {game.current_player} - 列を選択 (0-7): "))
+    row = int(input(f"プレイヤー {game.current_player} - 行を選択! (0-7): "))
+    col = int(input(f"プレイヤー {game.current_player} - 列を選択! (0-7): "))
     if game.make_move(row, col):
         print("\nターン交代\n")
 
