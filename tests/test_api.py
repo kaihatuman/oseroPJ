@@ -1,6 +1,5 @@
-
 from fastapi.testclient import TestClient
-from backend.server import app
+from backend.othello import app  # server.py ではなく othello.py から直接インポート
 import pytest
 
 client = TestClient(app)
@@ -16,6 +15,9 @@ def test_get_initial_board():
 
 def test_make_valid_move():
     """有効な手のテスト"""
+    # まずゲームをリスタート
+    client.post("/restart")
+    
     response = client.post("/move", json={"row": 2, "col": 3})
     assert response.status_code == 200
     data = response.json()

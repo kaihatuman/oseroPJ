@@ -1,10 +1,12 @@
+
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import os
+from backend.config.board_config import TEST_BOARDS, BOARD_DESCRIPTIONS
 
 app = FastAPI()
 
@@ -36,6 +38,10 @@ class Move(BaseModel):
     row: int
     col: int
 
+class BoardState(BaseModel):
+    board_str: str
+    current_player: str = 'X'
+
 class Othello:
     def __init__(self):
         # 8x8 のボードを初期化（' 'は空のセル）
@@ -45,6 +51,28 @@ class Othello:
         self.board[3][4] = self.board[4][3] = 'X'
         # 初期プレイヤーは'X'
         self.current_player = 'X'
+
+    def set_custom_board(self, board_str: str, current_player: str = 'X'):
+        """文字列から盤面を設定する"""
+        # 文字列を行ごとに分割して空白を除去
+        rows = [row.strip() for row in board_str.strip().split('\n') if row.strip()]
+        
+        if len(rows) != 8 or any(len(row) != 8 for row in rows):
+            raise ValueError("盤面は8x8である必要があります")
+            
+        if any(c not in '-XO' for row in rows for c in row):
+            raise ValueError("盤面には '-', 'X', 'O' のみ使用できます")
+            
+        if current_player not in ['X', 'O']:
+            raise ValueError("プレイヤーは 'X' または 'O' である必要があります")
+
+        # 盤面を設定
+        self.board = [[c if c in 'XO' else ' ' for c in row] for row in rows]
+        self.current_player = current_player
+
+    def board_to_string(self) -> str:
+        """盤面を文字列形式で返す"""
+        return '\n'.join(''.join(cell if cell != ' ' else '-' for cell in row) for row in self.board)
 
     def is_valid_move(self, row, col):
         """指定された位置に手が打てるか確認する"""
@@ -113,14 +141,22 @@ class Othello:
                     valid_moves.append({"row": row, "col": col})
         return valid_moves
 
+    def get_score(self):
+        """現在のスコアを取得"""
+        x_count = sum(row.count('X') for row in self.board)
+        o_count = sum(row.count('O') for row in self.board)
+        return {"X": x_count, "O": o_count}
+
 game = Othello()
 
+# 基本的なゲーム操作のエンドポイント
 @app.get("/board")
 def get_board():
     return {
         "board": game.board,
         "current_player": game.current_player,
-        "valid_moves": game.get_valid_moves()
+        "valid_moves": game.get_valid_moves(),
+        "score": game.get_score()
     }
 
 @app.post("/move")
@@ -135,7 +171,11 @@ def make_move(move: Move):
 
 @app.get("/status")
 def game_status():
-    return {"winner": game.get_winner()}
+    return {
+        "winner": game.get_winner(),
+        "score": game.get_score(),
+        "has_valid_move": game.has_valid_move()
+    }
 
 @app.post("/restart")
 def restart_game():
@@ -143,8 +183,39 @@ def restart_game():
     game = Othello()
     return get_board()
 
+# カスタム盤面関連のエンドポイント
+@app.post("/set-board")
+def set_board(board_state: BoardState):
+    """カスタム盤面を設定するエンドポイント"""
+    try:
+        game.set_custom_board(board_state.board_str, board_state.current_player)
+        return get_board()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/board-string")
+def get_board_string():
+    """現在の盤面を文字列形式で取得"""
+    return {"board_str": game.board_to_string(), "current_player": game.current_player}
+
+@app.get("/test-boards")
+async def get_test_boards():
+    """テスト用の盤面データとその説明を返す"""
+    return {
+        "test_boards": TEST_BOARDS,
+        "descriptions": BOARD_DESCRIPTIONS
+    }
+
 if __name__ == '__main__':
     import uvicorn
     print(f"Frontend directory: {FRONTEND_DIR}")
     print(f"Index file path: {os.path.join(FRONTEND_DIR, 'index.html')}")
+    print("\nAvailable endpoints:")
+    print("GET  /board           - 現在の盤面を取得")
+    print("POST /move           - 手を打つ")
+    print("GET  /status         - ゲームの状態を取得")
+    print("POST /restart        - ゲームをリスタート")
+    print("POST /set-board      - カスタム盤面を設定")
+    print("GET  /board-string   - 盤面を文字列形式で取得")
+    print("GET  /test-boards    - テスト用盤面を取得")
     uvicorn.run(app, host="localhost", port=8000)

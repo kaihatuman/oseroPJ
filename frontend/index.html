@@ -5,166 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>オセロゲーム</title>
     <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f0f0f0;
-            margin: 0;
-            padding: 20px;
-        }
-
-        table {
-            border-collapse: collapse;
-            background-color: #008000;
-            margin: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        }
-
-        td {
-            width: 60px;
-            height: 60px;
-            text-align: center;
-            border: 1px solid #000;
-            cursor: pointer;
-            position: relative;
-        }
-
-        .cell-content {
-            width: 80%;
-            height: 80%;
-            margin: 10%;
-            border-radius: 50%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            transition: all 0.3s ease;
-        }
-
-        .X {
-            background-color: #000;
-        }
-
-        .O {
-            background-color: #fff;
-        }
-
-        .valid-move {
-            background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            width: 30%;
-            height: 30%;
-            margin: 35%;
-        }
-
-        h2 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            font-size: 1.2em;
-            margin: 10px 0;
-            color: #444;
-        }
-
-        .btn {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-
-        .btn:hover {
-            background-color: #45a049;
-        }
-
-        .score-board {
-            display: flex;
-            justify-content: space-around;
-            width: 300px;
-            margin: 20px 0;
-        }
-
-        .score {
-            text-align: center;
-            padding: 10px;
-            background-color: white;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+        /* 既存のスタイルはそのまま */
     </style>
 </head>
 <body>
-    <h2>オセロゲーム</h2>
-    <div class="score-board">
-        <div class="score">
-            <div>黒 (X)</div>
-            <div id="score-x">2</div>
+    <div class="control-panel">
+        <div class="board-controls">
+            <select id="board-select" class="board-select">
+                <option value="">テスト盤面を選択...</option>
+            </select>
+            <button onclick="loadSelectedBoard()" class="control-btn">盤面を読み込む</button>
+            <button onclick="restartGame()" class="control-btn">リセット</button>
         </div>
-        <div class="score">
-            <div>白 (O)</div>
-            <div id="score-o">2</div>
-        </div>
+        <div id="board-description" class="board-description"></div>
     </div>
-    <div id="status" class="status">現在のプレイヤー: 黒 (X)</div>
+
+    <div id="game-info">
+        <div id="current-player"></div>
+    </div>
     <table id="board"></table>
-    <button id="restart-btn" class="btn">ゲームをリスタート</button>
 
     <script>
-        let validMoves = [];
-
-        function updateScore() {
-            let xCount = 0, oCount = 0;
-            document.querySelectorAll('td').forEach(cell => {
-                if (cell.firstChild?.classList.contains('X')) xCount++;
-                if (cell.firstChild?.classList.contains('O')) oCount++;
-            });
-            document.getElementById('score-x').textContent = xCount;
-            document.getElementById('score-o').textContent = oCount;
-        }
-
-        function createCell(value, row, col) {
-            const cell = document.createElement('td');
-            if (value !== ' ') {
-                const disc = document.createElement('div');
-                disc.className = `cell-content ${value}`;
-                cell.appendChild(disc);
-            } else if (validMoves.some(move => move.row === row && move.col === col)) {
-                const hint = document.createElement('div');
-                hint.className = 'valid-move';
-                cell.appendChild(hint);
-            }
-            cell.onclick = () => makeMove(row, col);
-            return cell;
-        }
+        let testBoards = {};
+        let boardDescriptions = {};
 
         function renderBoard(data) {
-            const board = document.getElementById('board');
-            validMoves = data.valid_moves || [];
-            board.innerHTML = '';
-            
-            data.board.forEach((row, i) => {
-                const tr = document.createElement('tr');
-                row.forEach((cell, j) => {
-                    tr.appendChild(createCell(cell, i, j));
-                });
-                board.appendChild(tr);
-            });
+            if (!data || !data.board) {
+                console.error('Invalid board data:', data);
+                return;
+            }
 
-            document.getElementById('status').textContent = 
-                `現在のプレイヤー: ${data.current_player === 'X' ? '黒 (X)' : '白 (O)'}`;
-            
-            updateScore();
+            const board = document.getElementById('board');
+            if (!board) {
+                console.error('Board element not found');
+                return;
+            }
+
+            // ボードをクリア
+            board.innerHTML = '';
+
+            // ボードを生成
+            for (let i = 0; i < 8; i++) {
+                const row = document.createElement('tr');
+                for (let j = 0; j < 8; j++) {
+                    const cell = document.createElement('td');
+                    cell.onclick = () => makeMove(i, j);
+
+                    const disc = document.createElement('div');
+                    disc.className = 'cell-content ' + (data.board[i][j] !== ' ' ? data.board[i][j] : '');
+                    
+                    cell.appendChild(disc);
+                    row.appendChild(cell);
+                }
+                board.appendChild(row);
+            }
+
+            // 現在のプレイヤーを表示
+            const playerInfo = document.getElementById('current-player');
+            if (playerInfo) {
+                playerInfo.textContent = `現在のプレイヤー: ${data.current_player === 'X' ? '黒' : '白'}`;
+            }
         }
 
         async function makeMove(row, col) {
@@ -189,23 +89,69 @@
             }
         }
 
+        async function loadSelectedBoard() {
+            const select = document.getElementById('board-select');
+            const selectedBoard = select.value;
+            if (!selectedBoard) return;
+
+            try {
+                const response = await fetch('/set-board', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        board_str: testBoards[selectedBoard],
+                        current_player: 'X'
+                    })
+                });
+                const data = await response.json();
+                renderBoard(data);
+                
+                document.getElementById('board-description').textContent = 
+                    boardDescriptions[selectedBoard] || '';
+            } catch (error) {
+                alert('盤面の設定に失敗しました');
+            }
+        }
+
         async function restartGame() {
             try {
                 const response = await fetch('/restart', { method: 'POST' });
                 const data = await response.json();
                 renderBoard(data);
+                document.getElementById('board-description').textContent = 
+                    'ゲームをリセットしました';
+                document.getElementById('board-select').value = '';
             } catch (error) {
                 alert('ゲームのリスタートに失敗しました');
             }
         }
 
-        document.getElementById('restart-btn').onclick = restartGame;
+        window.onload = async function() {
+            try {
+                // テスト盤面データの取得
+                const response = await fetch('/test-boards');
+                const data = await response.json();
+                testBoards = data.test_boards;
+                boardDescriptions = data.descriptions;
 
-        // 初期ボードの取得と描画
-        fetch('/board')
-            .then(response => response.json())
-            .then(data => renderBoard(data))
-            .catch(error => alert('ゲームの初期化に失敗しました'));
+                // セレクトボックスの選択肢を更新
+                const select = document.getElementById('board-select');
+                for (const [key, _] of Object.entries(testBoards)) {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = key;
+                    select.appendChild(option);
+                }
+
+                // 初期ボードの取得と描画
+                const boardResponse = await fetch('/board');
+                const boardData = await boardResponse.json();
+                renderBoard(boardData);
+            } catch (error) {
+                document.getElementById('board-description').textContent = 
+                    'ゲームの初期化に失敗しました';
+            }
+        };
     </script>
 </body>
 </html>
